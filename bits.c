@@ -146,7 +146,7 @@ NOTES:
  *   Rating: 1
  */
 int signMask(void) {
-  return 1;
+  return 1 << 31;
 }
 
 // P2
@@ -158,7 +158,7 @@ int signMask(void) {
  *   Rating: 2
  */
 int bitXor(int x, int y) {
-	return 2;
+	return ~(~(x & ~y) & ~(~x & y));
 }
 
 // P3
@@ -170,7 +170,8 @@ int bitXor(int x, int y) {
  *   Rating: 3
  */
 int negativePart(int x){
-  return 3;
+  int sign = x >> 31;
+  return ((x ^ sign) + 1) & sign;
 }
 
 
@@ -185,7 +186,11 @@ int negativePart(int x){
  *   Rating: 4
  */
 int copyByteWithin(int x, int src, int dst) {
-  return 4;
+  int srcShift = src << 3;
+  int dstShift = dst << 3;
+  int byte = (x >> srcShift) & 0xff;
+  int mask = 0xff << dstShift;
+  return (x & ~mask) | (byte << dstShift);
 }
 
 // P5
@@ -198,7 +203,8 @@ int copyByteWithin(int x, int src, int dst) {
  *   Rating: 4
  */
 int logicalShift(int x, int n) {
-  return 5;
+  int mask = ~(((1 << 31) >> n) << 1);
+  return (x >> n) & mask;
 }
 
 // P6
@@ -210,7 +216,9 @@ int logicalShift(int x, int n) {
  *   Rating: 4
  */
 int swapNibblePairs(int x) {
-  return 6;
+  int mask = 0x0f | (0x0f << 8);
+  mask = mask | (mask << 16);
+  return ((x & mask) << 4) | ((x >> 4) & mask);
 }
 
 // P7
@@ -223,7 +231,10 @@ int swapNibblePairs(int x) {
  *   Rating: 4
  */
 int secondLowestZeroBit(int x) {
-  return 7;
+  int zeros = ~x;
+  int first = zeros & (~zeros + 1);
+  int rest = zeros ^ first;
+  return rest & (~rest + 1);
 }
 
 // P8
@@ -236,7 +247,12 @@ int secondLowestZeroBit(int x) {
  *   Rating: 5
  */
 int oddParity(int x) {
-  return 8;
+  x = x ^ (x >> 16);
+  x = x ^ (x >> 8);
+  x = x ^ (x >> 4);
+  x = x ^ (x >> 2);
+  x = x ^ (x >> 1);
+  return !(x & 1);
 }
 
 // P9
@@ -249,7 +265,10 @@ int oddParity(int x) {
  *   Rating: 5
  */
 int rotateRightBits(int x, int n) {
-  return 9;
+  int shift = n & 31;
+  int left = (32 + (~shift + 1)) & 31;
+  int mask = ~(((1 << 31) >> shift) << 1);
+  return ((x >> shift) & mask) | (x << left);
 }
 
 // P10
@@ -264,7 +283,13 @@ int rotateRightBits(int x, int n) {
  *   Rating: 5
  */
 int roundEvenPow2(int x, int n) {
-  return 10;
+  int mask = (1 << n) + ~0;
+  int remainder = x & mask;
+  int half = 1 << (n + ~0);
+  int greater = ((half + (~remainder + 1)) >> 31) & 1;
+  int equal = !(remainder ^ half);
+  int increment = greater | (equal & ((x >> n) & 1));
+  return (x + (increment << n)) & ~mask;
 }
 
 // P11
@@ -280,7 +305,16 @@ int roundEvenPow2(int x, int n) {
  *   Rating: 5
  */
 int midpointTowardFirst(int x, int y) {
-  return 11;
+  int common = x & y;
+  int different = x ^ y;
+  int average = common + (different >> 1);
+  int xSign = x >> 31;
+  int ySign = y >> 31;
+  int difference = x + (~y + 1);
+  int sameSign = ~(xSign ^ ySign);
+  int greater = (((~xSign & ySign) |
+                  (sameSign & !(difference >> 31))) & 1);
+  return average + ((different & 1) & greater);
 }
 
 
@@ -294,7 +328,19 @@ int midpointTowardFirst(int x, int y) {
  *   Rating: 7
  */
 int isBetweenEitherOrder(int x, int a, int b) {
-  return 12;
+  int d1 = a + (~x + 1);
+  int s1 = a ^ x;
+  int leAx = (((s1 & a) | (~s1 & d1)) >> 31) | !d1;
+  int d2 = x + (~b + 1);
+  int s2 = x ^ b;
+  int leXb = (((s2 & x) | (~s2 & d2)) >> 31) | !d2;
+  int d3 = b + (~x + 1);
+  int s3 = b ^ x;
+  int leBx = (((s3 & b) | (~s3 & d3)) >> 31) | !d3;
+  int d4 = x + (~a + 1);
+  int s4 = x ^ a;
+  int leXa = (((s4 & x) | (~s4 & d4)) >> 31) | !d4;
+  return ((leAx & leXb) | (leBx & leXa)) & 1;
 }
 
 // P13
@@ -307,7 +353,17 @@ int isBetweenEitherOrder(int x, int a, int b) {
  *   Rating: 7
  */
 int mul5Sat(int x) {
-  return 13;
+  int four = x << 2;
+  int product = four + x;
+  int recovered = four >> 2;
+  int overflowFour = ((!!(recovered ^ x)) << 31) >> 31;
+  int overflowAdd = ((four ^ product) & ~(four ^ x)) >> 31;
+  int overflow = overflowFour | overflowAdd;
+  int sign = x >> 31;
+  int signBit = 1 << 31;
+  int maxValue = ~signBit;
+  int saturated = (sign & signBit) | (~sign & maxValue);
+  return (overflow & saturated) | (~overflow & product);
 }
 
 // P14
@@ -320,7 +376,23 @@ int mul5Sat(int x) {
  *   Rating: 7
  */
 int classifyAdd3(int x, int y, int z) {
-  return 14;
+  int mask = (1 << 30) + ~0;
+  int lowX = x & mask;
+  int lowY = y & mask;
+  int lowZ = z & mask;
+  int highX = x >> 30;
+  int highY = y >> 30;
+  int highZ = z >> 30;
+  int lowXY = lowX + lowY;
+  int carryXY = lowXY >> 30;
+  lowXY = lowXY & mask;
+  int lowXYZ = lowXY + lowZ;
+  int carryXYZ = lowXYZ >> 30;
+  int carry = carryXY + carryXYZ;
+  int high = highX + highY + highZ + carry;
+  int positiveOverflow = (! (high >> 31)) & (!!(high >> 1));
+  int negativeOverflow = ((high + 2) >> 31) & 1;
+  return positiveOverflow | (~negativeOverflow + 1);
 }
 
 // P15
@@ -337,7 +409,46 @@ int classifyAdd3(int x, int y, int z) {
  *   Rating: 7
  */
 unsigned floatScaleThreeHalves(unsigned uf) {
-  return 15;
+  unsigned sign = uf & 0x80000000u;
+  unsigned exponent = (uf >> 23) & 0xffu;
+  unsigned fraction = uf & 0x7fffffu;
+  unsigned product;
+  unsigned rounded;
+  unsigned shift;
+  unsigned remainder;
+  unsigned half;
+  unsigned mask;
+
+  if (exponent == 0xffu)
+    return uf;
+
+  if (exponent == 0) {
+    product = fraction * 3u;
+    rounded = product >> 1;
+    remainder = product & 1u;
+    if (remainder && (rounded & 1u))
+      rounded++;
+    if (rounded >= 0x800000u)
+      return sign | 0x00800000u | (rounded - 0x800000u);
+    return sign | rounded;
+  }
+
+  product = (0x800000u | fraction) * 3u;
+  shift = (product & 0x02000000u) ? 2u : 1u;
+  exponent += shift - 1u;
+  rounded = product >> shift;
+  mask = (1u << shift) - 1u;
+  remainder = product & mask;
+  half = 1u << (shift - 1u);
+  if (remainder > half || (remainder == half && (rounded & 1u)))
+    rounded++;
+  if (rounded == 0x1000000u) {
+    rounded >>= 1;
+    exponent++;
+  }
+  if (exponent >= 0xffu)
+    return sign | 0x7f800000u;
+  return sign | (exponent << 23) | (rounded - 0x800000u);
 }
 
 // P16
@@ -353,7 +464,38 @@ unsigned floatScaleThreeHalves(unsigned uf) {
  *   Rating: 10
  */
 unsigned floatRoundEven(unsigned uf) {
-  return 16;
+  unsigned sign = uf & 0x80000000u;
+  unsigned exponent = (uf >> 23) & 0xffu;
+  unsigned fraction = uf & 0x7fffffu;
+  unsigned mantissa;
+  unsigned shift;
+  unsigned mask;
+  unsigned remainder;
+  unsigned half;
+  unsigned integral;
+
+  if (exponent == 0xffu)
+    return uf;
+  if (exponent < 126u)
+    return sign;
+  if (exponent == 126u) {
+    if (fraction == 0)
+      return sign;
+    return sign | 0x3f800000u;
+  }
+  if (exponent >= 150u)
+    return uf;
+
+  shift = 150u - exponent;
+  mantissa = 0x800000u | fraction;
+  mask = (1u << shift) - 1u;
+  integral = mantissa >> shift;
+  remainder = mantissa & mask;
+  half = 1u << (shift - 1u);
+  uf = uf & ~mask;
+  if (remainder > half || (remainder == half && (integral & 1u)))
+    uf += 1u << shift;
+  return uf;
 }
 
 // P17
@@ -367,7 +509,41 @@ unsigned floatRoundEven(unsigned uf) {
  *   Rating: 10
  */
 unsigned float_i2f(int x) {
-  return 17;
+  unsigned ux = x;
+  unsigned sign = 0;
+  unsigned bit = 0x80000000u;
+  int exponent = 31;
+  unsigned mantissa;
+  unsigned shift;
+  unsigned remainder;
+  unsigned half;
+
+  if (x == 0)
+    return 0;
+  if (x < 0) {
+    sign = 0x80000000u;
+    ux = ~ux + 1u;
+  }
+  while (!(ux & bit)) {
+    bit >>= 1;
+    exponent--;
+  }
+  if (exponent <= 23) {
+    mantissa = (ux << (23 - exponent)) & 0x7fffffu;
+  } else {
+    shift = exponent - 23;
+    mantissa = ux >> shift;
+    remainder = ux & ((1u << shift) - 1u);
+    half = 1u << (shift - 1u);
+    if (remainder > half || (remainder == half && (mantissa & 1u)))
+      mantissa++;
+    if (mantissa == 0x1000000u) {
+      mantissa >>= 1;
+      exponent++;
+    }
+    mantissa &= 0x7fffffu;
+  }
+  return sign | ((exponent + 127) << 23) | mantissa;
 }
 
 
@@ -381,7 +557,18 @@ unsigned float_i2f(int x) {
  *   Rating: 10
  */
 int bitCount(int x) {
-  return 18;
+  int mask1 = 0x55 | (0x55 << 8);
+  int mask2 = 0x33 | (0x33 << 8);
+  int mask4 = 0x0f | (0x0f << 8);
+  mask1 = mask1 | (mask1 << 16);
+  mask2 = mask2 | (mask2 << 16);
+  mask4 = mask4 | (mask4 << 16);
+  x = (x & mask1) + ((x >> 1) & mask1);
+  x = (x & mask2) + ((x >> 2) & mask2);
+  x = (x & mask4) + ((x >> 4) & mask4);
+  x = x + (x >> 8);
+  x = x + (x >> 16);
+  return x & 0x3f;
 }
 
 // P19
@@ -395,5 +582,16 @@ int bitCount(int x) {
  */
 int bitReverse(int x)
 {
-  return 19;
+  int mask4 = 0x0f | (0x0f << 8);
+  mask4 = mask4 | (mask4 << 16);
+  int mask2 = mask4 ^ (mask4 << 2);
+  int mask1 = mask2 ^ (mask2 << 1);
+  int mask8 = 0xff | (0xff << 16);
+  int mask16 = 0xff | (0xff << 8);
+  x = ((x >> 1) & mask1) | ((x & mask1) << 1);
+  x = ((x >> 2) & mask2) | ((x & mask2) << 2);
+  x = ((x >> 4) & mask4) | ((x & mask4) << 4);
+  x = ((x >> 8) & mask8) | ((x & mask8) << 8);
+  x = ((x >> 16) & mask16) | (x << 16);
+  return x;
 }
